@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Cattle Breeder Game</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; background: #fafafa; color: #222; }
+  h1 { margin-bottom: 4px; }
+  .note { max-width: 950px; line-height: 1.35; }
+  button { padding: 8px 12px; border: 1px solid #555; border-radius: 6px; background: white; cursor: pointer; margin: 4px; }
+  button:hover { background: #eee; }
+  .primary { background: #e8f0ff; }
+  .next { background: #f0f8ee; margin-top: 12px; }
+  .main { display: grid; grid-template-columns: 1fr 360px; gap: 18px; align-items: start; }
+  .herd { display: grid; grid-template-columns: repeat(6, 128px); gap: 10px; margin-bottom: 14px; }
+  .cow { border: 2px solid #ccc; border-radius: 10px; background: white; padding: 8px; text-align: center; cursor: pointer; user-select: none; min-height: 112px; }
+  .cow.selected { border-color: #1f77b4; background: #eef6ff; }
+  .cow.keep { border-color: #3b8a2e; background: #f0f8ee; }
+  .cow.used { opacity: 0.45; background: #eee; cursor: default; }
+  .cow .icon { font-size: 34px; line-height: 1; }
+  .cow .label { font-weight: bold; }
+  .cow .geno { font-size: 14px; margin-top: 2px; }
+  .cow .sex, .small { font-size: 12px; color: #555; }
+  .typical .icon { transform: scaleX(0.85); }
+  .medium .icon { transform: scaleX(1.0); }
+  .extra .icon { transform: scaleX(1.2); }
+  .panel { background: white; border: 1px solid #ddd; border-radius: 10px; padding: 12px; }
+  .legend-row { display: grid; grid-template-columns: 70px 70px 1fr; gap: 8px; margin: 6px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border: 1px solid #ddd; padding: 5px; text-align: center; }
+  th { background: #f3f3f3; }
+  .log { max-height: 220px; overflow: auto; font-size: 13px; line-height: 1.35; }
+</style>
+</head>
+<body>
+<h1>Cattle Breeder Game</h1>
+<p class="note">
+  <strong>Goal:</strong> You are a cattle farmer who owns the herd below. Breed your cattle to get as many heavily-muscled cattle as possible.<br><br>
+  <strong>Directions:</strong> Select pairs of cattle to breed (reproduce). Each female can produce up to two offspring in a generation. At the end of the generation, select 6 offspring to breed (reproduce) in the next generation. Choose at least 4 females and 1–2 males. Continue breeding in each generation until you have met your goal.
+</p>
+
+<div>
+  <button onclick="resetGeneration()">Start This Generation Over</button>
+  <button onclick="resetSim()">Reset Simulation</button>
+  <span id="status" class="small"></span>
+</div>
+
+<div class="main">
+  <div>
+    <h2 id="genTitle">Generation 1</h2>
+
+    <h3>Breeding Herd</h3>
+    <div class="small">Select one available female and one male. Females can produce 2 offspring per generation.</div>
+    <div id="adults" class="herd"></div>
+    <button class="primary" onclick="breedSelected()">Breed Selected Parents</button>
+
+    <h3>Offspring Produced This Generation</h3>
+    <div class="small">Select 6 offspring to breed (reproduce) in the next generation. Choose at least 4 females and 1–2 males.</div>
+    <div id="offspring" class="herd"></div>
+    <button class="next" onclick="nextGeneration()">Start Next Generation</button>
+  </div>
+
+  <div class="panel">
+    <h3>Alleles and Phenotypes</h3>
+    <div class="legend-row"><strong>○○</strong><strong>(ee)</strong><span>typically-muscled</span></div>
+    <div class="legend-row"><strong>○★</strong><strong>(Ee)</strong><span>medium-muscled</span></div>
+    <div class="legend-row"><strong>★★</strong><strong>(EE)</strong><span>heavily-muscled</span></div>
+
+    <h3>Generation Record</h3>
+    <table>
+      <thead>
+        <tr><th>Gen.</th><th>Typically-muscled</th><th>Medium-muscled</th><th>Heavily-muscled</th></tr>
+      </thead>
+      <tbody id="history"></tbody>
+    </table>
+
+    <h3>Breeding Log</h3>
+    <div id="log" class="log"></div>
+  </div>
+</div>
+
+<script>
+let generation = 1;
+let nextId = 1;
+let adults = [];
+let startingAdults = [];
+let offspring = [];
+let selectedParents = [];
+let selectedKeepers = [];
+let history = [];
+let nextOffspringSexes = [];
+
+function resetSexQueue() {
+  nextOffspringSexes = ["female","female","female","female","male","male","male","male"];
+  for (let i = nextOffspringSexes.length - 1; i > 0; i--) {
+    let j = Math.floor(Math.random() * (i + 1));
+    let temp = nextOffspringSexes[i];
+    nextOffspringSexes[i] = nextOffspringSexes[j];
+    nextOffspringSexes[j] = temp;
+  }
+}
+
+function genotypeFromAlleles(a, b) {
+  let stars = (a === "★" ? 1 : 0) + (b === "★" ? 1 : 0);
+  if (stars === 0) return {symbols:"○○", code:"ee", phenotype:"typically-muscled"};
+  if (stars === 1) return {symbols:"○★", code:"Ee", phenotype:"medium-muscled"};
+  return {symbols:"★★", code:"EE", phenotype:"heavily-muscled"};
+}
+
+function makeCow(a, b, sex) {
+  let g = genotypeFromAlleles(a, b);
+  return {
+    id: nextId++,
+    alleles: [a, b],
+    symbols: g.symbols,
+    code: g.code,
+    phenotype: g.phenotype,
+    sex: sex || (Math.random() < 0.5 ? "female" : "male"),
+    offspringCount: 0
+  };
+}
+
+function cowFromCode(code, sex) {
+  if (code === "EE") return makeCow("★","★",sex);
+  if (code === "ee") return makeCow("○","○",sex);
+  return makeCow("○","★",sex);
+}
+
+function cloneCow(c) {
+  return {...c, alleles:[...c.alleles]};
+}
+
+function resetSim() {
+  generation = 1;
+  nextId = 1;
+  offspring = [];
+  selectedParents = [];
+  selectedKeepers = [];
+  history = [];
+  adults = [
+    cowFromCode("EE","male"),
+    cowFromCode("Ee","male"),
+    cowFromCode("Ee","female"),
+    cowFromCode("Ee","female"),
+    cowFromCode("ee","female"),
+    cowFromCode("ee","female")
+  ];
+  startingAdults = adults.map(cloneCow);
+  resetSexQueue();
+  document.getElementById("log").innerHTML = "";
+  recordGeneration();
+  render();
+}
+
+function resetGeneration() {
+  adults = startingAdults.map(cloneCow);
+  offspring = [];
+  selectedParents = [];
+  selectedKeepers = [];
+  resetSexQueue();
+  addLog("<strong>Generation " + generation + " restarted.</strong>");
+  render();
+}
+
+function renderCow(cow, role) {
+  let cls = cow.phenotype === "heavily-muscled" ? "extra" : cow.phenotype === "medium-muscled" ? "medium" : "typical";
+  let div = document.createElement("div");
+  let selected = role === "adult" ? selectedParents.includes(cow.id) : selectedKeepers.includes(cow.id);
+  div.className = "cow " + cls + (selected ? (role === "adult" ? " selected" : " keep") : "") + ((cow.sex === "female" && cow.offspringCount >= 2 && role === "adult") ? " used" : "");
+  div.onclick = function() {
+    if (role === "adult") {
+      if (cow.sex === "female" && cow.offspringCount >= 2) return;
+      toggleParent(cow.id);
+    } else {
+      toggleKeeper(cow.id);
+    }
+  };
+  let top = role === "adult" ? "ADULT" : (selectedKeepers.includes(cow.id) ? "KEEP" : "OFFSPRING");
+  div.innerHTML =
+    '<div class="small">' + top + '</div>' +
+    '<div class="icon">🐄</div>' +
+    '<div class="label">' + cow.phenotype + '</div>' +
+    '<div class="geno">' + cow.symbols + ' (' + cow.code + ')</div>' +
+    '<div class="sex">' + cow.sex + '</div>' +
+    (role === "adult" && cow.sex === "female" ? '<div class="small">offspring: ' + cow.offspringCount + '/2</div>' : '');
+  return div;
+}
+
+function render() {
+  document.getElementById("genTitle").textContent = "Generation " + generation;
+  let adultDiv = document.getElementById("adults");
+  let offDiv = document.getElementById("offspring");
+  adultDiv.innerHTML = "";
+  offDiv.innerHTML = "";
+
+  adults.forEach(c => adultDiv.appendChild(renderCow(c, "adult")));
+
+  if (offspring.length === 0) {
+    offDiv.innerHTML = '<div class="small">No offspring yet.</div>';
+  } else {
+    offspring.forEach(c => offDiv.appendChild(renderCow(c, "offspring")));
+  }
+
+  document.getElementById("status").textContent =
+    "Selected parents: " + selectedParents.length + "/2 | Selected offspring: " + selectedKeepers.length + "/6";
+  renderHistory();
+}
+
+function toggleParent(id) {
+  if (selectedParents.includes(id)) {
+    selectedParents = selectedParents.filter(x => x !== id);
+  } else {
+    if (selectedParents.length >= 2) selectedParents.shift();
+    selectedParents.push(id);
+  }
+  render();
+}
+
+function toggleKeeper(id) {
+  if (selectedKeepers.includes(id)) {
+    selectedKeepers = selectedKeepers.filter(x => x !== id);
+  } else {
+    if (selectedKeepers.length >= 6) {
+      alert("Select exactly 6 offspring. Unselect one first if you want to change your choice.");
+      return;
+    }
+    selectedKeepers.push(id);
+  }
+  render();
+}
+
+function breedSelected() {
+  if (selectedParents.length !== 2) {
+    alert("Select exactly two parents: one female and one male.");
+    return;
+  }
+  let p = selectedParents.map(id => adults.find(c => c.id === id));
+  if (p[0].sex === p[1].sex) {
+    alert("Select one female and one male.");
+    return;
+  }
+  let female = p.find(c => c.sex === "female");
+  let male = p.find(c => c.sex === "male");
+
+  if (female.offspringCount >= 2) {
+    alert("This female already produced two offspring this generation.");
+    return;
+  }
+
+  let a = female.alleles[Math.floor(Math.random()*2)];
+  let b = male.alleles[Math.floor(Math.random()*2)];
+  if (offspring.length >= 8) {
+    alert("This generation already has 8 offspring. Select 6 to breed (reproduce) in the next generation.");
+    return;
+  }
+  let calf = makeCow(a, b, nextOffspringSexes.shift());
+  offspring.push(calf);
+  female.offspringCount++;
+  selectedParents = [];
+
+  addLog("Gen " + generation + ": female " + female.symbols + " (" + female.code + ") + male " + male.symbols + " (" + male.code + ") → " + calf.symbols + " (" + calf.code + "), " + calf.phenotype + ", " + calf.sex);
+  render();
+}
+
+function nextGeneration() {
+  if (selectedKeepers.length !== 6) {
+    alert("Select exactly 6 offspring to become the next generation.");
+    return;
+  }
+  let selected = offspring.filter(c => selectedKeepers.includes(c.id));
+  let selectedFemales = selected.filter(c => c.sex === "female").length;
+  let selectedMales = selected.filter(c => c.sex === "male").length;
+
+  if (selectedFemales < 4 || selectedMales < 1 || selectedMales > 2) {
+    alert("This breeding herd does not have enough females to produce many offspring. Try again by selecting more females.");
+    return;
+  }
+
+  adults = selected.map(cloneCow);
+  adults.forEach(c => c.offspringCount = 0);
+  generation++;
+  offspring = [];
+  selectedParents = [];
+  selectedKeepers = [];
+  startingAdults = adults.map(cloneCow);
+  resetSexQueue();
+  recordGeneration();
+  addLog("<strong>Generation " + generation + " begins.</strong>");
+  render();
+}
+
+function recordGeneration() {
+  let total = adults.length;
+  let typical = adults.filter(c => c.phenotype === "typically-muscled").length;
+  let medium = adults.filter(c => c.phenotype === "medium-muscled").length;
+  let extra = adults.filter(c => c.phenotype === "heavily-muscled").length;
+  history.push({generation, total, typical, medium, extra});
+}
+
+function pct(n,total) {
+  return Math.round(100*n/total) + "%";
+}
+
+function renderHistory() {
+  let body = document.getElementById("history");
+  body.innerHTML = "";
+  history.forEach(h => {
+    let tr = document.createElement("tr");
+    tr.innerHTML =
+      "<td>" + h.generation + "</td>" +
+      "<td>" + h.typical + "</td>" +
+      "<td>" + h.medium + "</td>" +
+      "<td>" + h.extra + "</td>";
+    body.appendChild(tr);
+  });
+}
+
+function addLog(text) {
+  let log = document.getElementById("log");
+  log.innerHTML = "<div>" + text + "</div>" + log.innerHTML;
+}
+
+resetSim();
+</script>
+</body>
+</html>
