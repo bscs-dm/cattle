@@ -30,14 +30,27 @@
   th, td { border: 1px solid #ddd; padding: 5px; text-align: center; }
   th { background: #f3f3f3; }
   .log { max-height: 220px; overflow: auto; font-size: 13px; line-height: 1.35; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .overlay.hidden { display: none; }
+  .modal { background: white; border-radius: 12px; padding: 28px 32px; max-width: 540px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.18); position: relative; line-height: 1.5; }
+  .modal h2 { margin: 0 0 14px; font-size: 1.2em; }
+  .modal-close { position: absolute; top: 12px; right: 14px; font-size: 20px; background: none; border: none; cursor: pointer; color: #666; padding: 2px 6px; border-radius: 4px; }
+  .modal-close:hover { background: #eee; color: #222; }
 </style>
 </head>
 <body>
+
+<div class="overlay" id="infoOverlay">
+  <div class="modal">
+    <button class="modal-close" onclick="document.getElementById('infoOverlay').classList.add('hidden')" title="Close">✕</button>
+    <h2>Cattle Breeder Game</h2>
+    <p><strong>Goal:</strong> You are a cattle farmer who owns the herd below. Breed your cattle to get as many heavily-muscled cattle as possible.</p>
+    <p><strong>Directions:</strong> Select pairs of cattle to breed (reproduce). Each female can produce up to two offspring in a generation. At the end of the generation, select 6 offspring to breed (reproduce) in the next generation. Choose at least 4 females and 1–2 males. Continue breeding in each generation until you have met your goal.</p>
+    <button onclick="document.getElementById('infoOverlay').classList.add('hidden')" style="margin-top:8px;">Got it</button>
+  </div>
+</div>
+
 <h1>Cattle Breeder Game</h1>
-<p class="note">
-  <strong>Goal:</strong> You are a cattle farmer who owns the herd below. Breed your cattle to get as many heavily-muscled cattle as possible.<br><br>
-  <strong>Directions:</strong> Select pairs of cattle to breed (reproduce). Each female can produce up to two offspring in a generation. At the end of the generation, select 6 offspring to breed (reproduce) in the next generation. Choose at least 4 females and 1–2 males. Continue breeding in each generation until you have met your goal.
-</p>
 
 <div>
   <button onclick="resetGeneration()">Start This Generation Over</button>
