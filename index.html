@@ -192,7 +192,7 @@ function renderCow(cow, role) {
   div.innerHTML =
     '<div class="small">' + top + '</div>' +
     '<div class="icon">🐄</div>' +
-    '<div class="label">' + cow.phenotype + '</div>' +
+    '<div class="label">' + cow.phenotype.replace('-muscled', '') + '</div>' +
     '<div class="geno">' + cow.symbols + ' (' + cow.code + ')</div>' +
     '<div class="sex">' + cow.sex + '</div>' +
     (role === "adult" && cow.sex === "female" ? '<div class="small">offspring: ' + cow.offspringCount + '/2</div>' : '');
